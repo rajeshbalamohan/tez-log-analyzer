@@ -32,6 +32,7 @@ public class NodesAnalyzer extends BaseAnalyzer {
 
   // machines --> task --> Container
   private Map<String, Map<String, String>> nodes = Maps.newTreeMap();
+
   private static Pattern nodesPattern =
       Pattern.compile("Assigning container to task: containerId=(.*), task=(.*), containerHost=(.*), containerPriority");
 
@@ -42,6 +43,8 @@ public class NodesAnalyzer extends BaseAnalyzer {
       while (matcher.find()) {
         String containerId = matcher.group(1);
         String task = matcher.group(2);
+        //Get dagId from task attempt_1478350923850_0006_1_00_000022_0 (hardcoded now)
+        String dagId = task.substring(0, 29);
         String node = matcher.group(3);
         Map<String, String> taskMap = nodes.get(node);
         if (taskMap == null) {

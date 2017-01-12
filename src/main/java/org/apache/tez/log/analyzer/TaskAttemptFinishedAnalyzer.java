@@ -34,7 +34,9 @@ import java.util.regex.Pattern;
 public class TaskAttemptFinishedAnalyzer extends BaseAnalyzer {
 
   private final Pattern taskAttemptFinishedPattern =
-      Pattern.compile("vertexName=(.*), taskAttemptId=(.*), creationTime(.*), timeTaken=(\\d+), status=(.*), errorEnum=(.*), diagnostics=(.*)");
+      Pattern.compile("vertexName=(.*), taskAttemptId=(.*), creationTime(.*), "
+          + "startTime=(.*), finishTime=(.*), timeTaken=(\\d+), status=(.*),"
+          + " errorEnum=(.*), diagnostics=(.*)");
 
   private final Map<String, TaskAttemptFinished> taskAttemptFinishedMap = Maps.newTreeMap();
 
@@ -45,14 +47,16 @@ public class TaskAttemptFinishedAnalyzer extends BaseAnalyzer {
       while (matcher.find()) {
         String vertexId = matcher.group(1);
         String taskAttemptId = matcher.group(2);
-        String timeTaken = matcher.group(4);
-        String status = matcher.group(5);
-        String error = matcher.group(6);
-        String diagnostics = matcher.group(7);
+        String startTime = matcher.group(4);
+        String finishTime = matcher.group(5);
+        String timeTaken = matcher.group(6);
+        String status = matcher.group(7);
+        String error = matcher.group(8);
+        String diagnostics = matcher.group(9);
         TaskAttemptFinished
             taskAttemptFinished =
-            new TaskAttemptFinished(vertexId, taskAttemptId, timeTaken, status, error, diagnostics,
-                getCurrentLineNumber());
+            new TaskAttemptFinished(vertexId, taskAttemptId, startTime, finishTime, timeTaken,
+                status, error, diagnostics, getCurrentLineNumber());
         taskAttemptFinishedMap.put(taskAttemptId, taskAttemptFinished);
       }
     }
@@ -75,18 +79,23 @@ public class TaskAttemptFinishedAnalyzer extends BaseAnalyzer {
   }
 
   public static final class TaskAttemptFinished {
-    private final String vertexId;
-    private final String taskAttemptId;
-    private final String timeTaken;
-    private final String status;
-    private final String error;
-    private final String diagnostics;
-    private final long lineNumber;
+    public final String vertexId;
+    public final String taskAttemptId;
+    public final String startTime;
+    public final String finishTime;
+    public final String timeTaken;
+    public final String status;
+    public final String error;
+    public final String diagnostics;
+    public final long lineNumber;
 
-    TaskAttemptFinished(String vertexId, String taskAttemptId, String timeTaken, String status,
+    TaskAttemptFinished(String vertexId, String taskAttemptId, String startTime, String
+        finishTime, String timeTaken, String status,
         String error, String diagnostics, long lineNumber) {
       this.vertexId = vertexId;
       this.taskAttemptId = taskAttemptId;
+      this.startTime = startTime;
+      this.finishTime = finishTime;
       this.timeTaken = timeTaken;
       this.status = status;
       this.error = error;
@@ -99,6 +108,8 @@ public class TaskAttemptFinishedAnalyzer extends BaseAnalyzer {
           .add("line", lineNumber)
           .add("vertexId", vertexId)
           .add("taskAttemptId", taskAttemptId)
+          .add("startTime", startTime)
+          .add("finishTime", finishTime)
           .add("timeTaken", timeTaken)
           .add("status", status)
           .add("error", error)

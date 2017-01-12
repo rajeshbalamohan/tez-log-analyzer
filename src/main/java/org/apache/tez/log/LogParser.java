@@ -22,10 +22,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import org.apache.tez.log.analyzer.ConfigAnalyzer;
 import org.apache.tez.log.analyzer.DigraphExtractor;
 import org.apache.tez.log.analyzer.FailedTaskAnalyzer;
 import org.apache.tez.log.analyzer.HashTableAnalyzer;
+import org.apache.tez.log.analyzer.S3AWrapperLogAnalyzer;
 import org.apache.tez.log.analyzer.TaskAttemptKilledAnalyzer;
 import org.apache.tez.log.analyzer.NodesAnalyzer;
 import org.apache.tez.log.analyzer.RackResolverExtractor;
@@ -35,9 +37,11 @@ import org.apache.tez.log.analyzer.SplitsAnalyzer;
 import org.apache.tez.log.analyzer.StuckTaskAnalyzer;
 import org.apache.tez.log.analyzer.TaskAttemptFinishedAnalyzer;
 import org.apache.tez.log.analyzer.TaskAttemptStartedAnalyzer;
+import org.apache.tez.log.analyzer.TezGroupAnalyzer;
 import org.apache.tez.log.analyzer.VersionInfo;
 import org.apache.tez.log.analyzer.VertexFinishedAnalyzer;
 import org.apache.tez.log.analyzer.VertexMappingAnalyzer;
+import org.apache.tez.log.utils.SVGUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -45,8 +49,11 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
 public class LogParser {
@@ -56,6 +63,7 @@ public class LogParser {
   static {
     addStandardAnalyzer(new VersionInfo());
     addStandardAnalyzer(new DigraphExtractor());
+    addStandardAnalyzer(new TezGroupAnalyzer());
     addStandardAnalyzer(new SplitsAnalyzer());
     addStandardAnalyzer(new StuckTaskAnalyzer());
     addStandardAnalyzer(new VertexMappingAnalyzer());
@@ -71,6 +79,7 @@ public class LogParser {
     addStandardAnalyzer(new FailedTaskAnalyzer());
     addStandardAnalyzer(new NodesAnalyzer());
     addStandardAnalyzer(new RackResolverExtractor());
+    addStandardAnalyzer(new S3AWrapperLogAnalyzer());
     // addStandardAnalyzer(new DirectoryInfoExtractor());
     // addStandardAnalyzer(new LaunchContainerInfoExtractor());
   }
@@ -236,6 +245,110 @@ public class LogParser {
         }
       }
     }
+
+    /**
+     * For swimlanes (not including killed tasks)
+     */
+    /*
+    TODO: Need to work on this.
+
+
+    IAnalyzer nodeAnalyzer = parser.getAnalyzers()
+        .get(NodesAnalyzer.class.getName());
+    IAnalyzer taFinishedAnalyzer = parser.getAnalyzers()
+        .get(TaskAttemptFinishedAnalyzer.class.getName());
+    if (nodeAnalyzer != null && taFinishedAnalyzer != null) {
+      // machine --> task --> container
+      Map<String, Map<String, String>> nodes =
+          (Map<String, Map<String, String>>) nodeAnalyzer.getResult();
+      // taskIDStr --> taskAttemptFinished
+      Map<String, TaskAttemptFinishedAnalyzer.TaskAttemptFinished> taFinishedMap =
+          (Map<String, TaskAttemptFinishedAnalyzer.TaskAttemptFinished>)
+              taFinishedAnalyzer.getResult();
+
+      //Dirty hack to get all DAG
+      Set<String> allDags = Sets.newHashSet();
+      for(Map.Entry<String, Map<String, String>> entry : nodes.entrySet()) {
+        for (Map.Entry<String, String> taskEntry : entry.getValue().entrySet()) {
+          String taskId = taskEntry.getKey();
+          //attempt_1478350923850_0006_7
+          allDags.add(taskId.substring(0, 28));
+        }
+      }
+
+      // Construct a map of machine_container --> List<TaskAttemptId> from analyzer dataset.
+      final Map<String, TreeSet<TaskAttemptFinishedAnalyzer.TaskAttemptFinished>> mapping = Maps.newHashMap();
+      long minTime = Long.MAX_VALUE;
+      long maxTime = Long.MIN_VALUE;
+      for(String dag : allDags) {
+        for (Map.Entry<String, Map<String, String>> entry : nodes.entrySet()) {
+          for (Map.Entry<String, String> taskEntry : entry.getValue().entrySet()) {
+            String machine = entry.getKey();
+
+            String taskId = taskEntry.getKey();
+            String containerId = taskEntry.getValue();
+
+            if (!taskId.contains("1478350923850_0006_9")) {
+              continue;
+            }
+
+            String machineContainer = machine + "_" + containerId;
+            TreeSet<TaskAttemptFinishedAnalyzer.TaskAttemptFinished> attempts = mapping.get
+                (machineContainer);
+
+            if (attempts == null) {
+              attempts = new TreeSet<>(
+                  new Comparator<TaskAttemptFinishedAnalyzer.TaskAttemptFinished>() {
+                    @Override public int compare(TaskAttemptFinishedAnalyzer.TaskAttemptFinished o1,
+                        TaskAttemptFinishedAnalyzer.TaskAttemptFinished o2) {
+                      if (Long.parseLong(o1.startTime) < Long.parseLong(o2.startTime)) {
+                        return -1;
+                      } else if (Long.parseLong(o1.startTime) > Long.parseLong(o2.startTime)) {
+                        return 1;
+                      } else {
+                        return 0;
+                      }
+                    }
+                  });
+              mapping.put(machineContainer, attempts);
+            }
+
+            //Check if the attempt id is available in finished maps
+            if (taFinishedMap.containsKey(taskId)) {
+              TaskAttemptFinishedAnalyzer.TaskAttemptFinished attempt = taFinishedMap.get(taskId);
+              attempts.add(attempt);
+              if (Long.parseLong(attempt.finishTime) >= maxTime) {
+                maxTime = Long.parseLong(attempt.finishTime);
+              } else if (Long.parseLong(attempt.startTime) <= minTime) {
+                minTime = Long.parseLong(attempt.startTime);
+              }
+            }
+          }
+        }
+      }
+
+      // draw SVG
+      System.out.println("MinTime: " + minTime + ". maxTime: " + maxTime);
+      SVGUtils svg = new SVGUtils(minTime, maxTime, new TreeSet(mapping.keySet()));
+      int yOffset = 1;
+      for(Map.Entry<String, TreeSet<TaskAttemptFinishedAnalyzer.TaskAttemptFinished>> entry :
+          mapping.entrySet()) {
+        for (TaskAttemptFinishedAnalyzer.TaskAttemptFinished task : entry.getValue()) {
+          //draw lines
+          svg.drawStep(task.vertexId, Long.parseLong(task.startTime), Long.parseLong(task
+                  .timeTaken), yOffset, "LightGreen");
+        }
+        yOffset++;
+      }
+
+      svg.saveFileStr("/tmp/test.svg");
+      System.out.println("Wrote to /tmp/test.svg");
+
+      // Now generate the swimlane.
+
+
+    }
+*/
 
     System.out.println();
     parser.writeAnalysis();
