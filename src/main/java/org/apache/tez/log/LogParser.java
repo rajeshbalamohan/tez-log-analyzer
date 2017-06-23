@@ -22,27 +22,25 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import org.apache.tez.log.analyzer.ConfigAnalyzer;
 import org.apache.tez.log.analyzer.ContainerTimeoutAnalyzer;
 import org.apache.tez.log.analyzer.DigraphExtractor;
 import org.apache.tez.log.analyzer.FailedTaskAnalyzer;
 import org.apache.tez.log.analyzer.HashTableAnalyzer;
-import org.apache.tez.log.analyzer.S3AWrapperLogAnalyzer;
-import org.apache.tez.log.analyzer.TaskAttemptKilledAnalyzer;
 import org.apache.tez.log.analyzer.NodesAnalyzer;
 import org.apache.tez.log.analyzer.RackResolverExtractor;
+import org.apache.tez.log.analyzer.S3AWrapperLogAnalyzer;
 import org.apache.tez.log.analyzer.ShuffleBlamedForAnalyzer;
 import org.apache.tez.log.analyzer.ShuffleVertexManagerAnalyzer;
 import org.apache.tez.log.analyzer.SplitsAnalyzer;
 import org.apache.tez.log.analyzer.StuckTaskAnalyzer;
 import org.apache.tez.log.analyzer.TaskAttemptFinishedAnalyzer;
+import org.apache.tez.log.analyzer.TaskAttemptKilledAnalyzer;
 import org.apache.tez.log.analyzer.TaskAttemptStartedAnalyzer;
 import org.apache.tez.log.analyzer.TezGroupAnalyzer;
 import org.apache.tez.log.analyzer.VersionInfo;
 import org.apache.tez.log.analyzer.VertexFinishedAnalyzer;
 import org.apache.tez.log.analyzer.VertexMappingAnalyzer;
-import org.apache.tez.log.utils.SVGUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -50,11 +48,8 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
 public class LogParser {
@@ -90,7 +85,7 @@ public class LogParser {
   private Map<String, IAnalyzer> analyzers;
 
   // Any details that needs to be added for analysis
-  private List<String> additionalInfo;
+  private List<AdditionalInfo> additionalInfo;
 
   public LogParser(File file) {
     Preconditions.checkArgument(file.exists(), "File " + file + " does not exist");
@@ -142,17 +137,41 @@ public class LogParser {
       // Write additional details if any
       if (additionalInfo.size() > 0) {
         writer.write("Additional Info....\n");
-        for (String info : additionalInfo) {
+        for (AdditionalInfo info : additionalInfo) {
           writer.write("\n");
-          writer.write(info);
+          writer.write(info.message);
+          if (info.header) {
+            writer.write("\n");
+            // fill with *
+            for (int i = 0; i < info.message.length(); i++) {
+              writer.write("*");
+            }
+            writer.write("\n");
+          }
         }
+        writer.write("\n");
       }
     }
     System.out.println("Wrote " + file.getAbsolutePath());
   }
 
+  class AdditionalInfo {
+    final String message;
+    final boolean header;
+
+    public AdditionalInfo(String info, boolean header) {
+      this.message = info;
+      this.header = header;
+    }
+  }
+
   public void addAdditionalAnalysis(String info) {
-    additionalInfo.add(info);
+    addAdditionalAnalysis(info, false);
+  }
+
+  public void addAdditionalAnalysis(String info, boolean header) {
+    AdditionalInfo addInfo = new AdditionalInfo(info, header);
+    additionalInfo.add(addInfo);
   }
 
   public static void main(String[] args) throws IOException {
@@ -208,7 +227,7 @@ public class LogParser {
       ShuffleBlamedForAnalyzer.ShuffleBlamedForResult result =
           (ShuffleBlamedForAnalyzer.ShuffleBlamedForResult) shuffleBlamedFor.getResult();
 
-      parser.addAdditionalAnalysis("Source machine details..");
+      parser.addAdditionalAnalysis("Source machine details..", true);
       for (String srcMachine : result.getSrcMachines()) {
         //machine:45454, containerPriority= 8, containerResources=<memory:3584, vCores:1>
         String machine = srcMachine.substring(0, srcMachine.indexOf(":"));
@@ -217,13 +236,45 @@ public class LogParser {
 
       parser.addAdditionalAnalysis("");
       parser.addAdditionalAnalysis("");
-      parser.addAdditionalAnalysis("Fetcher machine details..");
+      parser.addAdditionalAnalysis("Fetcher machine details..", true);
       for (String fetcherMachine : result.getFetcherMachines()) {
         //machine:45454, containerPriority= 8, containerResources=<memory:3584, vCores:1>
         String machine = fetcherMachine.substring(0, fetcherMachine.indexOf(":"));
         parser.addAdditionalAnalysis(machine + " --> " + rackMap.get(machine));
       }
     }
+
+    /**
+     * For containers timeouts. Relate ContainerTimeoutAnalyzer and NodesAnalyzer
+     *
+     */
+    IAnalyzer containerTimeoutAnalyzer = parser.getAnalyzers()
+        .get(ContainerTimeoutAnalyzer.class.getName());
+    IAnalyzer nodesAnalyzer = parser.getAnalyzers()
+        .get(NodesAnalyzer.class.getName());
+    if (nodesAnalyzer != null && containerTimeoutAnalyzer != null) {
+      List<String> containersWithTimeout = (List<String>) containerTimeoutAnalyzer.getResult();
+
+      // Node --> <attempt, container>
+      Map<String, Map<String, String>> nodesResult =
+          (Map<String, Map<String, String>>) nodesAnalyzer.getResult();
+
+      parser.addAdditionalAnalysis("");
+      parser.addAdditionalAnalysis("Container time outs and attempt/node details", true);
+      for (String container : containersWithTimeout) {
+        for (Map.Entry<String, Map<String, String>> nodeEntry : nodesResult.entrySet()) {
+          Map<String, String> attemptToContainer = nodeEntry.getValue();
+          for (Map.Entry<String, String> attemptEntry : attemptToContainer.entrySet()) {
+            if (attemptEntry.getValue().equalsIgnoreCase(container)) {
+              parser.addAdditionalAnalysis(container +
+                  " --> " + nodeEntry.getKey() + " --> " + attemptEntry.getKey());
+            }
+          }
+        }
+      }
+      parser.addAdditionalAnalysis("");
+    }
+
 
     /**
      * Task attempts not finished
@@ -239,7 +290,7 @@ public class LogParser {
           (Map<String, TaskAttemptFinishedAnalyzer.TaskAttemptFinished>) taskAttemptFinished.getResult();
 
       parser.addAdditionalAnalysis("List of unfinished tasks!! started=" + started.size() + ", "
-          + "finished=" + finished.size());
+          + "finished=" + finished.size(), true);
       for(String task : started.keySet()) {
         //check if this task is in finished keys
         if (!finished.keySet().contains(task)) {
