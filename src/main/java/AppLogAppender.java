@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
  * If app logs are already in HDFS, it is easier to parse via TFile loader.
  * But in some cases, we get text logs. So we need to append
  * "machineName" to get the container details etc. This util just prepends
- * machine name, container id to every line.
+ * machine name, container fileId to every line.
  *
  * e.g of container log would start with
  *

@@ -24,6 +24,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.apache.tez.log.analyzer.ConfigAnalyzer;
+import org.apache.tez.log.analyzer.ContainerTimeoutAnalyzer;
 import org.apache.tez.log.analyzer.DigraphExtractor;
 import org.apache.tez.log.analyzer.FailedTaskAnalyzer;
 import org.apache.tez.log.analyzer.HashTableAnalyzer;
@@ -80,6 +81,7 @@ public class LogParser {
     addStandardAnalyzer(new NodesAnalyzer());
     addStandardAnalyzer(new RackResolverExtractor());
     addStandardAnalyzer(new S3AWrapperLogAnalyzer());
+    addStandardAnalyzer(new ContainerTimeoutAnalyzer());
     // addStandardAnalyzer(new DirectoryInfoExtractor());
     // addStandardAnalyzer(new LaunchContainerInfoExtractor());
   }
