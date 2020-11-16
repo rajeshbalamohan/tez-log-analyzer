@@ -24,8 +24,8 @@
     </repositories>
     -->
     <properties>
-        <hadoop-version>3.0.0-alpha3-SNAPSHOT</hadoop-version>
-        <tez-version>0.9.0-SNAPSHOT</tez-version>
+        <hadoop-version>3.0.0</hadoop-version>
+        <tez-version>0.9.1</tez-version>
         <guava-version>19.0</guava-version>
     </properties>
 
@@ -92,6 +92,14 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>8</source>
+                    <target>8</target>
+                </configuration>
             </plugin>
         </plugins>
     </build>
