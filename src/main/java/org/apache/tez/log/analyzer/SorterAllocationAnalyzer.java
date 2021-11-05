@@ -99,9 +99,11 @@ public class SorterAllocationAnalyzer extends BaseAnalyzer {
             + ".sorter.lazy-allocate"
             + ".memory=true; \n");
       }
+/*
      if (allocationDetails.sortMb != null && Integer.getInteger(allocationDetails.sortMb.trim()) < 256) {
         basisAnalysis.add(allocationDetails.attempt + ". SortMB seems small at " + allocationDetails.sortMb.trim() + "\n");
       }
+*/
     }
     return basisAnalysis.toString() + Joiner.on('\n').join(finishedSet);
   }

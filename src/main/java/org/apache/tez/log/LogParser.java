@@ -22,6 +22,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import org.apache.tez.log.analyzer.AMEventQueueAnalyzer;
 import org.apache.tez.log.analyzer.ConfigAnalyzer;
 import org.apache.tez.log.analyzer.ContainerTimeoutAnalyzer;
 import org.apache.tez.log.analyzer.DigraphExtractor;
@@ -66,6 +67,7 @@ public class LogParser {
     addStandardAnalyzer(new StuckTaskAnalyzer());
     addStandardAnalyzer(new VertexMappingAnalyzer());
     addStandardAnalyzer(new VertexFinishedAnalyzer());
+    addStandardAnalyzer(new AMEventQueueAnalyzer());
     addStandardAnalyzer(new ShuffleBlamedForAnalyzer());
     addStandardAnalyzer(new TaskAttemptStartedAnalyzer());
     addStandardAnalyzer(new TaskAttemptFinishedAnalyzer());
